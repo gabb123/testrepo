@@ -1,0 +1,481 @@
+*create controller directory*
+todo_controller.dart
+import 'package:api_assignment/model/todo.dart';
+import 'package:api_assignment/repository/repository.dart';
+
+class TodoController {
+  final Repository _repository;
+
+  TodoController(this._repository);
+
+  // get method
+  Future<List<Todo>> fetchTodoList() async {
+    return _repository.getTodoList();
+  }
+
+  // patch method
+  Future<String> updatePatchCompleted(Todo todo) async {
+    return _repository.patchCompleted(todo);
+  }
+
+  // put method
+  //Future<String> updatePutCompleted(Todo todo) async {
+  //  return _repository.putCompleted(todo);
+  //}
+
+  // delete method
+  Future<String> deleteTodo(Todo todo) async {
+    return _repository.delTodo(todo);
+  }
+
+  // post method
+  Future<String> postTodo(Todo todo) async {
+    return _repository.postTodo(todo);
+  }
+}
+
+*create model directory*
+todo.dart
+class Todo {
+  int? userId = 1;
+  var id;
+  String? title;
+  bool? completed;
+
+  Todo({this.userId, this.id, this.title, this.completed});
+
+  Todo.fromJson(Map<String, dynamic> json) {
+    userId = json['userId'];
+    id = json['id'];
+    title = json['title'];
+    completed = json['completed'];
+  }
+
+  Map<String, dynamic> toJson() {
+    final Map<String, dynamic> data = new Map<String, dynamic>();
+    data['userId'] = this.userId.toString();
+    data['id'] = this.id.toString();
+    data['title'] = this.title;
+    data['completed'] = this.completed.toString();
+    return data;
+  }
+}
+
+*create repository*
+repository.dart
+// fake server
+import 'package:api_assignment/model/todo.dart';
+
+abstract class Repository {
+  Future<List<Todo>> getTodoList();
+  Future<String> patchCompleted(Todo todo);
+  // Future<String> putCompleted(Todo todo);
+  Future<String> delTodo(Todo todo);
+  Future<String> postTodo(Todo todo);
+}
+
+todo_repository.dart
+import 'package:api_assignment/model/todo.dart';
+import 'package:api_assignment/repository/repository.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+
+class TodoRepository implements Repository {
+  String dataURL = 'https://jsonplaceholder.typicode.com';
+
+  // delete method
+  @override
+  Future<String> delTodo(Todo todo) async {
+    var url = Uri.parse('$dataURL/todos/${todo.id}');
+    var result = 'false';
+    await http.delete(url).then((value) {
+      print(value.body);
+      return result = 'Deleted';
+    }
+    );
+    return result;
+  }
+
+  // get method
+  @override
+  Future<List<Todo>> getTodoList() async{
+    // future async
+    List<Todo> todoList = [];
+    // https://jsonplaceholder.typicode.com/todos
+    var url = Uri.parse('$dataURL/todos');
+    var response = await http.get(url);
+    print('status code: ${response.statusCode}');
+    var body = json.decode(response.body); // convert
+    // parse
+    for(var i = 0; i < body.length; i++){
+      todoList.add(Todo.fromJson(body[i]));
+    }
+    return todoList;
+  }
+
+
+  // patch method
+  // patch modify passed variable
+  @override
+  Future<String> patchCompleted(Todo todo) async {
+    var url= Uri.parse('$dataURL/todos/${todo.id}');
+    String responseData = ''; // call back data
+    await http.patch(url, body: {
+      'completed': (!todo.completed!).toString(),
+    },
+      headers: {'Authorization': 'your_token'}
+    ).then((response) {
+      Map<String, dynamic> result = json.decode(response.body); // homepage data
+      print(result);
+      return responseData = result['completed'];
+    }
+    ); // bool? to String
+    return 'Completed : $responseData';
+  }
+
+  // put method
+  Future<String> putCompleted(Todo todo) async {
+    var url = Uri.parse('$dataURL/todos/${todo.id}');
+    String responseData = '';
+    await http.put(url,
+        body: {
+      'completed': (!todo.completed!).toString(),
+        },
+      headers: {'Authorization': 'your_token'}
+        ).then((response){
+          Map<String, dynamic> result = json.decode(response.body);
+          print(result);
+          return responseData = result['completed'];
+    }
+    );
+    return responseData;
+  }
+
+  // post method
+  @override
+  Future<String> postTodo(Todo todo) async {
+    print('${todo.toJson()}');
+    var url = Uri.parse('$dataURL/todos/');
+    var result = '';
+    var response = await http.post(url, body: todo.toJson());
+    print(response.statusCode);
+    print(response.body);
+    return 'true';
+  }
+}
+
+*create screen*
+home_page.dart
+import 'package:api_assignment/controller/todo_controller.dart';
+import 'package:api_assignment/model/todo.dart';
+import 'package:api_assignment/repository/todo_repository.dart';
+import 'package:api_assignment/screen/post_form.dart';
+import 'package:flutter/material.dart';
+
+class HomePage extends StatelessWidget {
+  const HomePage({Key? key}) : super(key: key);
+
+
+  @override
+  Widget build(BuildContext context) {
+    int count = 0;
+
+
+    // dependency injection
+    var todoController = TodoController(TodoRepository());
+    // test
+    todoController.fetchTodoList();
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('API Assignment'),
+      ),
+
+      body: FutureBuilder<List<Todo>>(
+        future: todoController.fetchTodoList(),
+        builder: (context, snapshot){
+          //
+          if (snapshot.connectionState == ConnectionState.waiting){
+            return const Center(
+              child: CircularProgressIndicator(),
+            );
+          }
+          if (snapshot.hasError){
+            return const Center(
+              child: Text('Error'),
+            );
+          }
+
+          return ListView.separated(
+              itemBuilder: (context, index){
+                var todo = snapshot.data?[index];
+                return Card(
+                  child: Dismissible(
+                    direction: DismissDirection.endToStart,
+                  key: UniqueKey(),
+                  child: Container(
+                    height: 75.0,
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                    child: Row(
+                      children: [
+                        Expanded(flex: 1, child: Text('${todo?.id}')),
+                        Expanded(flex: 5, child: Text('${todo?.title}')),
+                        Expanded(flex: 3, child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            // patch method call
+                            InkWell(
+                              onTap: (){
+                                todoController
+                                    .updatePatchCompleted(todo!)
+                                    .then((value)
+                                {
+                                  ScaffoldMessenger.of(context)
+                                      .showSnackBar(SnackBar(
+                                    duration: const Duration(milliseconds: 1000),
+                                    content: Text(value),),);
+                                }
+                                );
+                              },
+                                child: buildCallContainer('Patch', const Color(0xFF1976D2))),
+
+
+                          ],
+                        )),
+                      ],
+                    ),
+                  ),
+                    onDismissed: (direction) {
+                      todoController.deleteTodo(todo!).then((value) => {ScaffoldMessenger.of(context)
+                          .showSnackBar(SnackBar(
+                      duration: const Duration(milliseconds: 1000),
+                      content: Text(value),),),});
+                      --count;
+                    },
+                )
+                );
+              },
+              separatorBuilder: (context, index){
+                return const Divider(
+                  thickness: 0.5,
+                  height: 0.5,
+                );
+              },
+              itemCount: snapshot.data?.length ?? 0
+          );
+        },
+      ),
+        floatingActionButton: FloatingActionButton(
+    onPressed: () async {
+      Navigator.push(context,
+          MaterialPageRoute(builder: (context) => const PostForm())
+      );
+    },
+        child: const Icon(Icons.add),
+    ),
+    );
+  }
+
+  Container buildCallContainer(String title, Color color) {
+    return Container(
+      width: 80.0,
+      height: 40.0,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(10.0),
+      ),
+      child: Center(child: Text(title)),
+    );
+  }
+}
+
+
+post_form.dart
+import 'package:api_assignment/controller/todo_controller.dart';
+import 'package:api_assignment/model/todo.dart';
+import 'package:api_assignment/repository/todo_repository.dart';
+import 'package:flutter/material.dart';
+
+class PostForm extends StatefulWidget {
+  const PostForm({Key? key}) : super(key: key);
+
+  @override
+  State<PostForm> createState() => _PostFormState();
+}
+
+class _PostFormState extends State<PostForm> {
+
+  var todoController = TodoController(TodoRepository());
+  final userIdController = TextEditingController();
+  final idController = TextEditingController();
+  final titleController = TextEditingController();
+  final completedController = TextEditingController();
+  var trueOrFalse ='';
+  bool completeTrueOrFalse = false;
+  var formKey = GlobalKey<FormState>();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Add Todo'),
+      ),
+
+      body: Container(
+        padding: const EdgeInsets.only(left: 40, right: 40),
+        child: Form(
+          autovalidateMode: AutovalidateMode.onUserInteraction,
+          key: formKey,
+          child: ListView(
+            children: [
+              TextFormField(
+                enabled: false,
+                controller: userIdController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Your default Compnay Number #1',),
+              ),
+
+              TextFormField(
+                controller: idController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  hintText: 'Ex. 198',
+                  labelText: 'Please enter a unique Identification Number',
+                ),
+              ),
+
+
+              TextFormField(
+                controller: titleController,
+                keyboardType: TextInputType.text,
+                decoration: const InputDecoration(
+                  hintText: 'Ex. Application Programming Interface',
+                  labelText: 'Please enter a title',
+                ),
+              ),
+
+
+              const SizedBox(height: 20,),
+
+              CheckboxListTile(
+                value: completeTrueOrFalse,
+                onChanged: (val){
+                  setState(() {
+                    completeTrueOrFalse = val!;
+                  }
+                  );
+                },
+                activeColor: const Color(0xFF66BB6A),
+                title: const Text('Check the box if you want this to be completed'),
+              ),
+
+              const SizedBox(height: 20,),
+
+              ElevatedButton(
+                  onPressed: (){
+                    int idUser = 1;
+                    final idNumber = idController.text;
+                    final titleUser = titleController.text;
+                    final complete = completeTrueOrFalse;
+                    Todo todo = Todo(userId: idUser, id : idNumber, title: titleUser, completed: complete);
+                    todoController.postTodo(todo);
+                    Navigator.pop(context, todoController);
+
+                  },
+                  child: const Text('Submit')
+              )
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+update_todo.dart
+import 'package:api_assignment/repository/todo_repository.dart';
+import 'package:flutter/material.dart';
+
+class PatchUpdateTodo extends StatefulWidget {
+  final Map? todo;
+
+  const PatchUpdateTodo({Key? key, this.todo}) : super(key: key);
+
+  @override
+  State<PatchUpdateTodo> createState() => _PatchUpdateTodoState();
+}
+
+class _PatchUpdateTodoState extends State<PatchUpdateTodo> {
+
+  var formKey = GlobalKey<FormState>();
+  TextEditingController titleController = TextEditingController();
+  bool isEdit = false;
+
+  @override
+  void initState(){
+    super.initState();
+    final todo = widget.todo;
+    if (todo != null){
+      isEdit = true;
+      final title = todo['title'];
+      titleController.text = title;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text( isEdit ? 'Edit Todo' : 'Update Todo Data'),
+      ),
+
+      body: Container(
+        child: Form(
+          autovalidateMode: AutovalidateMode.onUserInteraction,
+          key: formKey,
+          child: ListView(
+            children: [
+              TextFormField(
+                controller: titleController,
+                keyboardType: TextInputType.text,
+                decoration: const InputDecoration(
+                  hintText: 'Title you want to update',
+                  labelText: 'Please dont leave this blank',
+                ),
+              ),
+
+              ElevatedButton(
+                  onPressed: isEdit ? updateData : submitData,
+                  child: Padding(
+                    padding: const EdgeInsets.all(20.0),
+                    child: Text(isEdit ? 'Update' : 'Submit'),
+                  ))
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> updateData() async {
+    final title = titleController.text;
+    final body = {
+      'title' : title,
+      'completed' : false,
+    };
+  }
+  Future<void> submitData() async {
+    final title = titleController.text;
+    final body = {
+      'title' : title,
+      'completed' : false,
+    };
+    TodoRepository();
+  }
+}
+
+
+
+http: ^0.13.3
